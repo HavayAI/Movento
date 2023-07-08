@@ -1,59 +1,85 @@
 import cv2
-import os
 
 DEFAULT_FPS = 30
 
-def play_video_frames(frames, frame_rate=DEFAULT_FPS):
-    for frame in frames:
-        cv2.imshow('Image', frame)
-        if cv2.waitKey(int(1000 / frame_rate)) & 0xFF == ord('q'):
-            break
-    cv2.destroyAllWindows()
 
-def save_video(frames, output_path, fps=DEFAULT_FPS):
-    height, width, _ = frames[0].shape
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+class Video:
+    def __init__(self, path, custom_fps=DEFAULT_FPS, cust_size: tuple[int] = None, isduplicate=False):
+        self.path = path
+        if cust_size:
+            self.frame_width, self.frame_height = cust_size[0], cust_size[1]
+        self.fps = custom_fps
+        if not isduplicate:
+            cap = cv2.VideoCapture(path)
+            if not cust_size:
+                self.frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                self.frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            self.frames = self.crop_frames_init(cap)
 
-    for frame in frames:
-        # out.write(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-        out.write(frame)
+    def crop_frames_init(self, cap):
+        # box is (x, y, w, h)
+        frame_list = []
+        x, y, w, h = 0, 0, self.frame_width, self.frame_height
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                break
+            cropped_frame = frame[y:y + h, x:x + w]
+            frame_list.append(cropped_frame)
+        cap.release()
 
-def crop_frames(cap, box):
-    # box is (x, y, w, h)
-    frame_list = []
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
+        return frame_list
 
-        # Crop the frame using the bounding box coordinates
+    def duplicate(self):
+        new_video = Video(self.path, self.fps, (self.frame_width, self.frame_height))
+        new_video.frames = self.frames
+
+    def crop_frames(self, box):
+        # box is (x, y, w, h)
+        frame_list = []
         x, y, w, h = box
-        cropped_frame = frame[y:y + h, x:x + w]
+        for frame in self.frames:
+            cropped_frame = frame[y:y + h, x:x + w]
+            frame_list.append(cropped_frame)
 
-        # Append the cropped frame to the list
-        frame_list.append(cropped_frame)
 
-    # Release the video capture
-    cap.release()
+        return frame_list
 
-    return frame_list
+
+
+
+    def save_video(self, frames, output_path, fps=0):
+        if fps == 0:
+            fps = self.fps
+        height, width, _ = self.frame_height, self.frame_width
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+
+        for frame in frames:
+            # out.write(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+            out.write(frame)
+
+
+
+
+
+    def display_video(self):
+        for frame in self.frames:
+            # Display the frame
+            cv2.imshow('Video (press q to quit)', frame)
+
+            # Wait for the specified time based on the desired FPS
+            delay = int(1000 / (self.fps + 4))  # Calculate the delay in milliseconds
+            if cv2.waitKey(delay) & 0xFF == ord('q'):
+                break
+
+        cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":
     video_path = '../resources/fence_seq_1.mp4'
-    cap = cv2.VideoCapture(video_path)
-    frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    print(frame_width, frame_height)
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    print("Frame Rate:", fps)
-    frames = crop_frames(cap, (0, 0, frame_width, frame_height))
-    save_video(frames, "../resources/blablabla.mp4")
-    cap.release()
-
-
-
-
-
-
+    vid = Video(video_path)
+    print(DEFAULT_FPS)
+    print(vid.frame_width, vid.frame_height)
+    print("Frame Rate:", vid.fps)
+    vid.display_video()
